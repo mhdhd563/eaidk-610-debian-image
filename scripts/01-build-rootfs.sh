@@ -121,7 +121,7 @@ PKGS="locales tzdata console-setup keyboard-configuration
  fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-gtk2 fcitx5-frontend-qt5
  fcitx5-config-qt fcitx5-modules im-config
  network-manager network-manager-gnome wpasupplicant iw rfkill
- ethtool net-tools v4l-utils htop unzip zip"
+ ethtool net-tools v4l-utils htop unzip zip systemd-timesyncd fake-hwclock curl"
 # bookworm 里并非所有包都存在（例如 xfce-polkit），先过滤，避免 apt 整体失败
 AVAIL=""
 for p in $PKGS; do
@@ -209,9 +209,87 @@ CHROOT
 # /home/debian 的属主必须是 1000:1000（容器里没有 debian 用户，不能用名字 chown）
 chown -R 1000:1000 "$R/home/debian"
 
-echo "==> 5/6 驱动加载保险"
+echo "==> 5/6 驱动加载保险 + v4 增补（时间同步 / PA root / 音频通路）"
 mkdir -p "$R/etc/modules-load.d"
 printf 'dwmac-rk\nrealtek\n' > "$R/etc/modules-load.d/eaidk-net.conf"
+printf 'snd-soc-rt5651\n'    > "$R/etc/modules-load.d/eaidk-audio.conf"   # 模块本体由 scripts/04 装进来
+
+# --- v4: 时间同步（这块板没有 RTC 纽扣电池）---
+# 1) 国内 NTP（默认的 debian pool 在国内很慢）
+sed -i 's|^#*NTP=.*|NTP=ntp.aliyun.com time1.cloud.tencent.com cn.pool.ntp.org|;
+        s|^#*FallbackNTP=.*|FallbackNTP=ntp.aliyun.com cn.pool.ntp.org|' "$R/etc/systemd/timesyncd.conf"
+# 2) 空 RTC 的值不可信，而 fake-hwclock 默认只把时钟往前调（覆盖不了垃圾的未来时间）→ 无条件采用保存值
+sed -i 's|^#*FORCE=.*|FORCE=force|' "$R/etc/default/fake-hwclock"
+# 3) 预置时间文件（首启就有个合理起点）
+date -u '+%Y-%m-%d %H:%M:%S' > "$R/etc/fake-hwclock.data"
+# 4) 镜像里没有 cron → 自带定时存盘（Debian 默认的 /etc/cron.hourly/fake-hwclock 不会执行）
+cat > "$R/etc/systemd/system/fake-hwclock-save.service" <<'EOF'
+[Unit]
+Description=Save the current clock (battery-less board)
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/fake-hwclock save
+EOF
+cat > "$R/etc/systemd/system/fake-hwclock-save.timer" <<'EOF'
+[Unit]
+Description=Periodically save the current clock
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target
+EOF
+# 5) 按各单元自己的 WantedBy 建软链（确定性做法，不依赖 chroot 里的 systemctl enable）
+for u in systemd-timesyncd.service fake-hwclock.service fake-hwclock-save.timer; do
+  src=""; for d in /usr/lib/systemd/system /lib/systemd/system; do [ -f "$R$d/$u" ] && src="$d/$u" && break; done
+  [ -n "$src" ] || { echo "    !! 找不到 $u"; continue; }
+  want=$(awk '/^\[Install\]/{f=1} f && /^WantedBy=/{sub(/^WantedBy=/,""); print; exit}' "$R$src")
+  for w in $want; do mkdir -p "$R/etc/systemd/system/$w.wants"; ln -sf "/lib/systemd/system/$u" "$R/etc/systemd/system/$w.wants/$u"; done
+done
+
+# --- v4: PulseAudio 支持 root 桌面（上游带 ConditionUser=!root，root 会话默认起不来）---
+grep -q '^allow-autospawn-for-root' "$R/etc/pulse/client.conf" \
+  || echo 'allow-autospawn-for-root = yes' >> "$R/etc/pulse/client.conf"
+# debian 加入 audio 组（logind ACL 万一没生效时的保险）
+sed -i 's/^audio:x:\([0-9]*\):pulse$/audio:x:\1:pulse,debian/' "$R/etc/group"
+
+# --- v4: 音频通路保险（显式打开 RT5651 耳机通路的 DAPM 开关；控件不存在则跳过）---
+cat > "$R/usr/local/sbin/eaidk-audio-unmute.sh" <<'EOF'
+#!/bin/bash
+set -u
+ID=""
+for _ in $(seq 1 10); do
+  ID=$(aplay -l 2>/dev/null | sed -n 's/^card [0-9]*: \([^ ]*\).*rt5651.*/\1/p' | head -1)
+  [ -n "$ID" ] && break
+  sleep 1
+done
+[ -n "$ID" ] || exit 0
+for ctl in 'HPO MIX DAC1 Switch' 'HPO MIX HPVOL Switch' 'HPO L Playback' 'HPO R Playback' 'HPOVOL L' 'HPOVOL R'; do
+  amixer -q -c "$ID" sset "$ctl" on 2>/dev/null || true
+done
+amixer -q -c "$ID" sset 'HP Playback Volume' unmute 2>/dev/null || true
+exit 0
+EOF
+chmod +x "$R/usr/local/sbin/eaidk-audio-unmute.sh"
+cat > "$R/etc/systemd/system/eaidk-audio-unmute.service" <<'EOF'
+[Unit]
+Description=EAIDK-610: explicitly enable the RT5651 headphone output path
+After=sound.target
+Wants=sound.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/eaidk-audio-unmute.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+ln -sf /etc/systemd/system/eaidk-audio-unmute.service \
+       "$R/etc/systemd/system/multi-user.target.wants/eaidk-audio-unmute.service"
 
 echo "==> 6/6 镜像卫生（清缓存 / machine-id / SSH host key）"
 rm -f "$R/var/cache/apt/archives/"*.deb

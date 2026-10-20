@@ -9,28 +9,30 @@
 
 | 版本 | 大小 | 内容 | 说明 |
 |---|---|---|---|
-| **v3** | 1042 MiB | Debian 12 + XFCE + Firefox ESR/Chromium + mpv/VLC + **fcitx5 中文输入法** + **NetworkManager** + **RT5651 音频修复** | **推荐** |
-| v2 | 921 MiB | Debian 12 + XFCE 桌面（无输入法、无图形化网络管理、板载音频不可用） | 保留 |
+| **v4** | 1043 MiB | v3 + **时间同步**（NTP + fake-hwclock，针对无 RTC 电池的板子）+ **PulseAudio 支持 root 桌面** + 音频通路保险 | **推荐** |
+| v3 | 1042 MiB | Debian 12 + XFCE + Firefox ESR/Chromium + mpv/VLC + **fcitx5 中文输入法** + **NetworkManager** + **RT5651 音频修复** | 保留 |
+| v2 | 921 MiB | Debian 12 + XFCE 桌面（无输入法、无图形化网络管理、无板载音频） | 保留 |
 | v1 | 309 MiB | 纯命令行（以太网设备树未修正，**勿用**） | 仅存档 |
 
-**v3 真机验证状态**：引导链 ✅ ｜ 串口控制台 ✅ ｜ 有线网络 ✅ ｜ 图形界面 ✅ ｜ 浏览器 ✅ ｜ 视频播放器 ✅ ｜ 首启扩容+swap ✅
-板载耳机 ⚠️（驱动已补，混音器/输出选择可能需手动一次）｜ WiFi ⚠️（NVRAM 为替身文件）｜ 视频硬解 ❌（见下）
+**真机验证状态**：引导链 ✅ ｜ 串口控制台 ✅ ｜ 有线网络 ✅ ｜ 图形界面 ✅ ｜ 浏览器 ✅ ｜ 视频播放器 ✅ ｜ 首启扩容+swap ✅ ｜ RT5651 声卡注册 ✅
+板载耳机**出不出声 ⚠️ 未验证**（驱动已补；v4 另加了"开机显式打开耳机通路开关"的保险，待上板确认）｜ 时间同步 ⚠️ v4 已内置方案，待上板确认｜ WiFi ⚠️（NVRAM 为替身文件）｜ 视频硬解 ❌（见下）
 
 ## 下载镜像
 
 | 版本 | 下载 | 大小 |
 |---|---|---|
-| **v3（推荐）** | [`.img.gz`](https://github.com/mhdhd563/eaidk-610-debian-image/releases/download/v3/rk3399-eaidk-610-debian12-xfce-v3-6.1.0-53-arm64.img.gz) ｜ [`.sha256`](https://github.com/mhdhd563/eaidk-610-debian-image/releases/download/v3/rk3399-eaidk-610-debian12-xfce-v3-6.1.0-53-arm64.img.gz.sha256) | 1042 MiB |
+| **v4（推荐）** | [`.img.gz`](https://github.com/mhdhd563/eaidk-610-debian-image/releases/download/v4/rk3399-eaidk-610-debian12-xfce-v4-6.1.0-53-arm64.img.gz) ｜ [`.sha256`](https://github.com/mhdhd563/eaidk-610-debian-image/releases/download/v4/rk3399-eaidk-610-debian12-xfce-v4-6.1.0-53-arm64.img.gz.sha256) | 1043 MiB |
+| v3 | [`.img.gz`](https://github.com/mhdhd563/eaidk-610-debian-image/releases/download/v3/rk3399-eaidk-610-debian12-xfce-v3-6.1.0-53-arm64.img.gz) ｜ [`.sha256`](https://github.com/mhdhd563/eaidk-610-debian-image/releases/download/v3/rk3399-eaidk-610-debian12-xfce-v3-6.1.0-53-arm64.img.gz.sha256) | 1042 MiB |
 | 所有版本 | [Releases 页面](https://github.com/mhdhd563/eaidk-610-debian-image/releases) | — |
 
 ## 快速开始
 
 ```bash
 # 1. 从 Releases 下载对应 .img.gz 和 .sha256
-sha256sum -c rk3399-eaidk-610-debian12-xfce-v3-6.1.0-53-arm64.img.gz.sha256
+sha256sum -c rk3399-eaidk-610-debian12-xfce-v4-6.1.0-53-arm64.img.gz.sha256
 
 # 2. 烧录（先 lsblk 确认设备！）
-gunzip -c rk3399-eaidk-610-debian12-xfce-v3-6.1.0-53-arm64.img.gz \
+gunzip -c rk3399-eaidk-610-debian12-xfce-v4-6.1.0-53-arm64.img.gz \
   | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
 sync
 ```
@@ -56,7 +58,8 @@ sync
 │   ├── 01-design-plan.md              # 总体方案（分区布局、免挂载组装原理、风险评估）
 │   ├── image-v1-cli.md                # v1 交付说明（纯命令行）
 │   ├── image-v2-xfce.md               # v2 交付说明（桌面）
-│   └── image-v3-xfce-ime-nm-audio.md  # v3 交付说明（输入法/网络/音频，含耳机根因分析）
+│   ├── image-v3-xfce-ime-nm-audio.md  # v3 交付说明（输入法/网络/音频，含耳机根因分析）
+│   └── image-v4-xfce-timesync-pa-root.md  # v4 交付说明（时间同步 / PA root 支持 / 音频保险）
 ├── dts/
 │   ├── rk3399-eaidk-610-rgmii-id.dtb              # 修正后（默认使用）
 │   ├── rk3399-eaidk-610-rgmii-MACdelay.dtb        # 上游原样（回退对比用）
@@ -106,6 +109,20 @@ sync
 
 9. **视频硬解做不到（浏览器内）**
    主线内核没有 VA-API 驱动；rk3399 的 VPU（hantro/rkvdec）是 **stateless V4L2**，且**不支持 AV1**（AV1 是 RK3588 才有的）。所以网页视频是纯软解 —— 建议在 `about:config` 里关掉 `media.av1.enabled` 让站点回退到 H.264，并降低分辨率。
+
+10. **时间：没有 RTC 电池的板子必须自带 NTP + fake-hwclock**
+    镜像里**一个 NTP 客户端都没有**（`systemd-timesyncd` 是 `systemd` 的 *Recommends*，`--no-install-recommends` 会漏掉）；而板子没有 RTC 电池，内核 `CONFIG_RTC_HCTOSYS=y` 会把空 RTC 的垃圾值读成系统时间。
+    只装 timesyncd 还不够 —— 在它校时之前的几秒里，HTTPS 会因证书"尚未生效"报错、日志时间也会错乱。所以还要 `fake-hwclock`（开机先恢复上次保存的时间）+ `FORCE=force`（空 RTC 的值不可信，而默认行为**只会把时钟往前调**，覆盖不了垃圾的未来时间）。
+    ⚠️ 另外**镜像里没有 cron**，Debian 默认的 `/etc/cron.hourly/fake-hwclock` 根本不会执行 → 必须自带 systemd 定时器。详见 `docs/image-v4-xfce-timesync-pa-root.md` §1。
+
+11. **PulseAudio 与 root 桌面**
+    以 `root` 登录桌面时：喇叭图标永远"连接中"、`pavucontrol` 打不开，**但 USB 耳机却有声音**。
+    原因（硬证据）：`/usr/lib/systemd/user/pulseaudio.service` 与 `pulseaudio.socket` 都带 **`ConditionUser=!root`** —— 上游明确拒绝为 root 运行 PA；且 `client.conf` 的 `allow-autospawn-for-root` 默认 `no` → root 会话里没人能拉起 PA。至于"有声"，是播放器**绕过 PA 直接走 ALSA**（能响，但不归 PA 管，所以没有每应用音量/输出切换）。
+    修法：`client.conf` 追加 `allow-autospawn-for-root = yes`。**桌面仍建议用 `debian` 登录**。详见 `docs/image-v4-xfce-timesync-pa-root.md` §2。
+
+12. **音频链路：先查驱动，再查混音器**
+    v1/v2 耳机无声的根因是**驱动缺失**（Debian 内核没编 `CONFIG_SND_SOC_RT5651` → `simple-audio-card` 缺 codec 半边 → 整张声卡注册不起来），**不是**混音器配置问题。
+    判据很简单：`aplay -l` 里有没有那张声卡 —— 没有就是驱动层，有再谈混音器。v4 另加了一个开机服务显式打开耳机通路的 DAPM 开关作为保险。
 
 ## 从零构建
 
