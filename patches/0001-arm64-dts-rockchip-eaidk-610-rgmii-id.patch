@@ -1,0 +1,48 @@
+From 1b289522d663a51f37900950836338eda9bbec08 Mon Sep 17 00:00:00 2001
+From: TODO Your Name <placeholder@example.invalid>
+Date: Mon, 19 Oct 2026 16:10:35 +0000
+Subject: [PATCH] arm64: dts: rockchip: fix RGMII delays on the EAIDK-610
+
+The EAIDK-610 generates the RGMII delays on the PHY side: the board vendor
+device tree uses phy-mode = "rgmii-id" and leaves the MAC-side delay
+properties unset.  The upstream description instead combines
+phy-mode = "rgmii" with explicit tx_delay/rx_delay values, which applies the
+delays twice.
+
+With both delays in place the RTL8211E never establishes a link: the stmmac
+driver probes, eth0 shows up, but the carrier stays down, so DHCP never
+completes and the board has no network access.
+
+Use phy-mode = "rgmii-id" and drop the MAC-side delays, matching the vendor
+description.  Verified on hardware: the link comes up, eth0 obtains a DHCP
+lease and traffic passes.
+
+Fixes: 904f983256fd ("arm64: dts: rockchip: Add dts for a rk3399 based board EAIDK-610")
+
+---
+ arch/arm64/boot/dts/rockchip/rk3399-eaidk-610.dts | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/rockchip/rk3399-eaidk-610.dts b/arch/arm64/boot/dts/rockchip/rk3399-eaidk-610.dts
+index b90bf26..5f2d6f2 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3399-eaidk-610.dts
++++ b/arch/arm64/boot/dts/rockchip/rk3399-eaidk-610.dts
+@@ -276,14 +276,12 @@
+ 	assigned-clock-parents = <&clkin_gmac>;
+ 	clock_in_out = "input";
+ 	phy-supply = <&vcc_lan>;
+-	phy-mode = "rgmii";
++	phy-mode = "rgmii-id";
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&rgmii_pins>;
+ 	snps,reset-gpio = <&gpio3 RK_PB7 GPIO_ACTIVE_LOW>;
+ 	snps,reset-active-low;
+ 	snps,reset-delays-us = <0 10000 50000>;
+-	tx_delay = <0x28>;
+-	rx_delay = <0x11>;
+ 	status = "okay";
+ };
+ 
+-- 
+2.39.5
+
