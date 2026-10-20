@@ -48,7 +48,10 @@ cd "$(cd "$(dirname "$0")/.." && pwd)"
 echo "==> 2/4 配置 remote 并推送 main"
 git remote remove origin 2>/dev/null || true
 git remote add origin "https://github.com/$OWNER/$REPO.git"
-git -c http.extraheader="Authorization: Bearer $TOKEN" push -u origin main
+# 注意：git 的传输层**不认** Bearer，必须用 Basic（用户名随意，密码位置放 token），
+# 否则会退化成"提示输入用户名"而在无 TTY 环境直接失败。
+B64=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+git -c http.extraheader="Authorization: Basic $B64" push -u origin main
 git remote set-url origin "https://github.com/$OWNER/$REPO.git"   # 确保 remote 里没有凭据
 
 echo "==> 3/4 创建 Release $TAG"
@@ -60,12 +63,15 @@ REL_ID=$(echo "$REL_JSON" | python3 -c 'import json,sys;print(json.load(sys.stdi
 
 echo "==> 4/4 上传资产（镜像约 1 GB，可能要几分钟到几十分钟）"
 [ -f "$IMAGE" ] || { echo "!! 找不到镜像：$IMAGE"; exit 1; }
-curl -sS --progress-bar -X POST \
+# 注意：**必须**用 -T（从磁盘流式上传）而不是 --data-binary @file。
+# 后者会把整个文件读进内存，1 GB 的镜像在内存紧张的机器上会直接
+# "curl: option --data-binary: out of memory" 失败。
+curl -sS --no-progress-meter -X POST -T "$IMAGE" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/gzip" \
-  --data-binary "@$IMAGE" \
   "https://uploads.github.com/repos/$OWNER/$REPO/releases/$REL_ID/assets?name=$(basename "$IMAGE")" \
-  | grep -E '"name"|"size"|"message"' || true
+  -o /tmp/gh-asset.json -w '  HTTP %{http_code} | 上传 %{size_upload} 字节 | %{time_total}s\n'
+python3 -c "import json;d=json.load(open('/tmp/gh-asset.json'));print('  ✓',d.get('name'),f\"{d.get('size',0):,}\",'bytes',d.get('state'))" 2>/dev/null || head -c 300 /tmp/gh-asset.json
 
 for f in "$IMAGE" "$IMAGE.sha256"; do
   case "$f" in *.sha256) [ -f "$f" ] || continue; CT="text/plain";; *) continue;; esac

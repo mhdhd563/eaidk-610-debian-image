@@ -16,6 +16,13 @@
 **v3 真机验证状态**：引导链 ✅ ｜ 串口控制台 ✅ ｜ 有线网络 ✅ ｜ 图形界面 ✅ ｜ 浏览器 ✅ ｜ 视频播放器 ✅ ｜ 首启扩容+swap ✅
 板载耳机 ⚠️（驱动已补，混音器/输出选择可能需手动一次）｜ WiFi ⚠️（NVRAM 为替身文件）｜ 视频硬解 ❌（见下）
 
+## 下载镜像
+
+| 版本 | 下载 | 大小 |
+|---|---|---|
+| **v3（推荐）** | [`.img.gz`](https://github.com/mhdhd563/eaidk-610-debian-image/releases/download/v3/rk3399-eaidk-610-debian12-xfce-v3-6.1.0-53-arm64.img.gz) ｜ [`.sha256`](https://github.com/mhdhd563/eaidk-610-debian-image/releases/download/v3/rk3399-eaidk-610-debian12-xfce-v3-6.1.0-53-arm64.img.gz.sha256) | 1042 MiB |
+| 所有版本 | [Releases 页面](https://github.com/mhdhd563/eaidk-610-debian-image/releases) | — |
+
 ## 快速开始
 
 ```bash
